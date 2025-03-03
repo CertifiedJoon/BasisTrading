@@ -1,0 +1,21 @@
+{
+  "name": "websocketproxy",
+  "version": "1.0.0",
+  "description": "proxius maximus II",
+  "main": "proxy.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Joonyoung Moon <mjypark1212@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "@types/ws": "^8.5.14",
+    "ts-node": "^10.9.2",
+    "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8",
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.2"
+  }
+}
