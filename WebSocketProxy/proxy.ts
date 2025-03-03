@@ -3,6 +3,7 @@ import { ExchangeName, ExchangeServerURL } from "./types/ExchangeServers";
 import { WebSocket } from "ws";
 
 const config_data = require("./config.json");
+const exchangeConnections = {};
 
 interface ExchangeServers {
   exchangeName: ExchangeName;
@@ -24,21 +25,6 @@ if (process.argv[2] == "child") {
   const portToServe = process.argv[5];
 
   const wss = new WebSocket.Server({ port: parseInt(portToServe) });
-  const exchangeWs = new WebSocket(exchangeServerURL);
-
-  exchangeWs.on("open", () => {
-    exchangeWs.send(
-      JSON.stringify({
-        req_id: "test",
-        op: "subscribe",
-        args: ["tickers.BTCUSDT"],
-      })
-    );
-  });
-
-  exchangeWs.on("close", () => {
-    console.log("Disconnected from server");
-  });
 
   wss.on("connection", (ws: WebSocket) => {
     console.log("New client connected");
@@ -49,15 +35,40 @@ if (process.argv[2] == "child") {
       ws.send(`Server received your message: ${message}`);
     });
 
+    const exchangeWs = new WebSocket(exchangeServerURL);
+
     ws.on("close", () => {
       console.log("Client disconnected");
+      exchangeWs.send(
+        JSON.stringify({
+          req_id: "test",
+          op: "unsubscribe",
+          args: ["tickers.BTCUSDT"],
+        })
+      );
+      exchangeWs.close();
     });
-  });
 
-  exchangeWs.on("message", (message: Buffer) => {
-    // console.log(message.toString("ascii"));
-    wss.clients.forEach((client) => {
-      client.send(message.toString());
+    exchangeWs.on("open", () => {
+      exchangeWs.send(
+        JSON.stringify({
+          req_id: "test",
+          op: "subscribe",
+          args: ["tickers.BTCUSDT"],
+        })
+      );
+    });
+
+    exchangeWs.on("close", () => {
+      console.log("Disconnected from server");
+    });
+
+    exchangeWs.on("message", (message: Buffer) => {
+      const response = JSON.parse(message.toString("ascii"));
+      if ("topic" in response)
+        wss.clients.forEach((client) => {
+          client.send(message.toString());
+        });
     });
   });
 } else {
