@@ -3,7 +3,16 @@
     {
       "exchangeName": "bybit",
       "exchangeServerURL": "wss://stream-testnet.bybit.com/v5/public/linear",
-      "port": 9990
+      "port": 9990,
+      "pingMessage": "{\"op\": \"ping\"}",
+      "pingInterval": 20000
+    },
+    {
+      "exchangeName": "hyperliquid",
+      "exchangeServerURL": "wss://api.hyperliquid-testnet.xyz/ws",
+      "port": 9991,
+      "pingMessage": "{ \"method\": \"ping\" }",
+      "pingInterval": 60000
     }
   ]
 }

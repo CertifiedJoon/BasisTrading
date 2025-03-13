@@ -9,6 +9,8 @@ interface ExchangeServers {
   exchangeName: ExchangeName;
   exchangeServerURL: ExchangeServerURL;
   port: number;
+  pingMessage: string;
+  pingInterval: number;
 }
 
 interface Config {
@@ -23,6 +25,8 @@ if (process.argv[2] == "child") {
   const exchangeName: ExchangeName = process.argv[3];
   const exchangeServerURL: ExchangeServerURL = process.argv[4];
   const portToServe = process.argv[5];
+  const pingMessage = process.argv[6];
+  const pingInterval = parseInt(process.argv[7]);
 
   const wss = new WebSocket.Server({ port: parseInt(portToServe) });
 
@@ -39,24 +43,34 @@ if (process.argv[2] == "child") {
 
     ws.on("close", () => {
       console.log("Client disconnected");
-      exchangeWs.send(
-        JSON.stringify({
-          req_id: "test",
-          op: "unsubscribe",
-          args: ["tickers.BTCUSDT"],
-        })
-      );
       exchangeWs.close();
     });
 
     exchangeWs.on("open", () => {
-      exchangeWs.send(
-        JSON.stringify({
-          req_id: "test",
-          op: "subscribe",
-          args: ["tickers.BTCUSDT"],
-        })
-      );
+      switch (exchangeName) {
+        case "bybit":
+          exchangeWs.send(
+            JSON.stringify({
+              req_id: "test",
+              op: "subscribe",
+              args: ["tickers.BTCUSDT"],
+            })
+          );
+          break;
+        case "hyperliquid":
+          exchangeWs.send(
+            JSON.stringify({
+              method: "subscribe",
+              subscription: {
+                type: "activeAssetCtx",
+                coin: "BTC",
+              },
+            })
+          );
+          break;
+        default:
+          break;
+      }
     });
 
     exchangeWs.on("close", () => {
@@ -65,11 +79,27 @@ if (process.argv[2] == "child") {
 
     exchangeWs.on("message", (message: Buffer) => {
       const response = JSON.parse(message.toString("ascii"));
-      if ("topic" in response)
-        wss.clients.forEach((client) => {
-          client.send(message.toString());
-        });
+      switch (exchangeName) {
+        case "bybit":
+          if ("topic" in response)
+            wss.clients.forEach((client) => {
+              client.send(message.toString());
+            });
+          break;
+        case "hyperliquid":
+          if (response["channel"] == "activeAssetCtx")
+            wss.clients.forEach((client) => {
+              client.send(message.toString());
+            });
+          break;
+        default:
+          break;
+      }
     });
+
+    setInterval(() => {
+      exchangeWs.send(pingMessage);
+    }, pingInterval);
   });
 } else {
   const children: ChildProcess[] = [];
@@ -79,11 +109,19 @@ if (process.argv[2] == "child") {
   for (let i = 0; i < exchangeServers.length; i++) {
     const controller = new AbortController();
     const { signal } = controller;
-    const { exchangeName, exchangeServerURL, port } = exchangeServers[i];
+    const { exchangeName, exchangeServerURL, port, pingMessage, pingInterval } =
+      exchangeServers[i];
 
     const child: ChildProcess = fork(
       __filename,
-      ["child", exchangeName, exchangeServerURL, port.toString()],
+      [
+        "child",
+        exchangeName,
+        exchangeServerURL,
+        port.toString(),
+        pingMessage,
+        pingInterval.toString(),
+      ],
       { signal }
     );
     children.push(child);
