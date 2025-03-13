@@ -1,8 +1,8 @@
 \l schema.q
 \l utils.q
 \l u.q
+\t 1000
 
-bybitPort: 9990;
 .u.init[];
 
 handleBybitMessage: {
@@ -16,25 +16,41 @@ handleBybitMessage: {
   a,(keyMapping[key d])!conversionMapping[key d]$ value d
   };
 
+handleHyperliquidMessage: {
+  d: x`data;
+  sym: "S"$raze (d`coin; "USDT");
+  d: d`ctx;
+  columnFilter: `funding`openInterest`oraclePx`markPx;
+  filteredColumns: columnFilter inter key d;
+  d: filteredColumns!@[d;filteredColumns];
+  conversionMapping: columnFilter!("F";"F";"F";"F");
+  keyMapping: columnFilter!(`fundingRate`openInterest`indexPrice`markPrice);
+  a: (`timestamp`exchange`sym`nextFundingTime)!((.utils.unixTimestampMs[]);`hyperliquid;sym;{x + 3600000 - x mod 3600 * 1000}.utils.unixTimestampMs[]);
+  a,(keyMapping[key d])!conversionMapping[key d]$ value d
+ };
+
 .z.ws: {
-  delta: handleBybitMessage .j.k x;
+  jsonMsg: .j.k x;
+  delta: $[.z.w~bybitConn;handleBybitMessage jsonMsg;.z.w~hyperliquidConn;handleHyperliquidMessage jsonMsg; ::];
   original: exec from SnapshotBasis where sym=delta[`sym], exchange=delta[`exchange];
   r: original ^ delta;
   r[`basisRate]: %[r[`markPrice] - r[`indexPrice]; r[`indexPrice]];
-  // $[`~original`exchange;`SnapshotBasis upsert delta; `SnapshotBasis upsert original, delta];
   `SnapshotBasis upsert r;
  };
 
 / connect to bybit proxy
-bybitConn: (`$":ws://localhost:9990")"GET / HTTP/1.1\r\nHost: host:port\r\n\r\n";
-
-\t 250
+bybitConn: @[(`$":ws://localhost:9990")"GET / HTTP/1.1\r\nHost: host:port\r\n\r\n"; 0];
+hyperliquidConn: @[(`$":ws://localhost:9991")"GET / HTTP/1.1\r\nHost: host:port\r\n\r\n"; 0];
 ttl: 6000000;
+
+calculateArb: {
+  {@[flip x; `exchange]!z[b] each b:@[flip x;y]}[0!select from SnapshotBasis; x; y]
+ }
 
 .z.ts: {
   delete from `HistoricalBasis where timestamp<.utils.unixTimestampMs[] - ttl;
   `HistoricalBasis insert 0!select from SnapshotBasis;
-  .u.pub[`SnapshotBasis; 0! value `SnapshotBasis];
+  `BTCUSDTFundingArb set flip calculateArb[`fundingRate; {y-x}];
+  `BTCUSDTPriceArb set flip calculateArb[`markPrice; {%[(y-x);x]}];
+  {.u.pub[x; 0! value x]} each tables[];
  };
-
-.u.sub
